@@ -18,6 +18,7 @@
 package cyclonedx
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"io"
@@ -40,11 +41,19 @@ type jsonBOMDecoder struct {
 
 // Decode implements the BOMDecoder interface.
 func (j jsonBOMDecoder) Decode(bom *BOM) error {
-	bytes, err := io.ReadAll(j.reader)
+	data, err := io.ReadAll(j.reader)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(bytes, bom)
+
+	if err := validateJSONDocument(data); err != nil {
+		return err
+	}
+	if err := validateJSONVersion(data); err != nil {
+		return err
+	}
+
+	return json.Unmarshal(data, bom)
 }
 
 type xmlBOMDecoder struct {
@@ -53,17 +62,22 @@ type xmlBOMDecoder struct {
 
 // Decode implements the BOMDecoder interface.
 func (x xmlBOMDecoder) Decode(bom *BOM) error {
-	err := xml.NewDecoder(x.reader).Decode(bom)
+	data, err := io.ReadAll(x.reader)
 	if err != nil {
 		return err
 	}
 
-	for specVersion, xmlNs := range xmlNamespaces {
-		if xmlNs == bom.XMLNS {
-			bom.SpecVersion = specVersion
-			break
-		}
+	header, err := validateXMLDocument(data)
+	if err != nil {
+		return err
 	}
+
+	if err := xml.NewDecoder(bytes.NewReader(data)).Decode(bom); err != nil {
+		return err
+	}
+
+	bom.SpecVersion = header.specVersion
+	bom.XMLNS = header.namespace
 
 	return nil
 }

@@ -244,3 +244,81 @@ func TestXmlBOMEncoder_EncodeVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestBOMEncoder_EncodeVersion_DoesNotModifyInput(t *testing.T) {
+	newTestBOM := func() *BOM {
+		zero := 0.0
+
+		bom := NewBOM()
+		bom.SerialNumber = "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79"
+		bom.Metadata = &Metadata{
+			Component: &Component{
+				Type:    ComponentTypeApplication,
+				Name:    "application",
+				Version: "1.0.0",
+			},
+		}
+		bom.Components = &[]Component{
+			{
+				Type:       ComponentTypeLibrary,
+				Name:       "library",
+				Version:    "1.0.0",
+				Properties: &[]Property{{Name: "empty-slice", Value: "kept"}},
+				Components: &[]Component{},
+			},
+		}
+		bom.Dependencies = &[]Dependency{
+			{Ref: "application", Dependencies: &[]string{"library"}},
+		}
+		bom.Vulnerabilities = &[]Vulnerability{
+			{
+				ID:      "CVE-0000-0000",
+				Ratings: &[]VulnerabilityRating{{Score: &zero}},
+			},
+		}
+
+		return bom
+	}
+
+	testCases := []struct {
+		name        string
+		format      BOMFileFormat
+		specVersion SpecVersion
+	}{
+		{name: "JSON", format: BOMFileFormatJSON, specVersion: SpecVersion1_2},
+		{name: "XML", format: BOMFileFormatXML, specVersion: SpecVersion1_0},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			bom := newTestBOM()
+			expected := newTestBOM()
+
+			buf := bytes.Buffer{}
+			err := NewBOMEncoder(&buf, testCase.format).
+				SetPretty(true).
+				EncodeVersion(bom, testCase.specVersion)
+			require.NoError(t, err)
+
+			assert.Equal(t, expected, bom)
+		})
+	}
+}
+
+func TestJsonBOMEncoder_EncodeVersion_PreservesZeroVulnerabilityScore(t *testing.T) {
+	score := 0.0
+	bom := NewBOM()
+	bom.Vulnerabilities = &[]Vulnerability{{
+		ID: "CVE-0000-0000",
+		Ratings: &[]VulnerabilityRating{{
+			Score: &score,
+		}},
+	}}
+
+	buf := bytes.Buffer{}
+	err := NewBOMEncoder(&buf, BOMFileFormatJSON).
+		SetPretty(true).
+		EncodeVersion(bom, SpecVersion1_6)
+	require.NoError(t, err)
+	assert.Contains(t, buf.String(), `"score": 0`)
+}
