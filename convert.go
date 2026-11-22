@@ -28,6 +28,9 @@ func (b BOM) copyAndConvert(specVersion SpecVersion) (*BOM, error) {
 	}
 
 	bomCopy.convert(specVersion)
+	if err := validateBOMReferences(&bomCopy); err != nil {
+		return nil, fmt.Errorf("failed to validate converted bom: %w", err)
+	}
 	return &bomCopy, nil
 }
 
