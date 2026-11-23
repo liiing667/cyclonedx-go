@@ -38,6 +38,13 @@ func (b *BOM) convert(specVersion SpecVersion) {
 		b.ExternalReferences = nil
 	}
 	if specVersion < SpecVersion1_2 {
+		// CycloneDX 1.0 and 1.1 schemas require the components element even
+		// when there are no components. Keep an empty BOM serializable to
+		// those versions instead of emitting a schema-invalid document.
+		if b.Components == nil {
+			emptyComponents := []Component{}
+			b.Components = &emptyComponents
+		}
 		b.Dependencies = nil
 		b.Metadata = nil
 		b.Services = nil

@@ -35,23 +35,27 @@ var xmlSchemaFiles = map[SpecVersion]string{
 	SpecVersion1_7: "./schema/bom-1.7.xsd",
 }
 
-var xsdValidateInitOnce sync.Once
+var (
+	xsdValidateInitOnce sync.Once
+	xsdValidateInitErr  error
+)
 
-type xmlValidator struct{}
+type xmlValidator struct {
+	initErr error
+}
 
 func newXMLValidator() validator {
-	var initErr error
 	xsdValidateInitOnce.Do(func() {
-		initErr = xsdvalidate.Init()
+		xsdValidateInitErr = xsdvalidate.Init()
 	})
-	if initErr != nil {
-		panic(initErr)
-	}
-
-	return &xmlValidator{}
+	return &xmlValidator{initErr: xsdValidateInitErr}
 }
 
 func (xv xmlValidator) Validate(bom []byte, specVersion SpecVersion) error {
+	if xv.initErr != nil {
+		return fmt.Errorf("failed to initialize xml schema validator: %w", xv.initErr)
+	}
+
 	schemaFilePath, ok := xmlSchemaFiles[specVersion]
 	if !ok {
 		return fmt.Errorf("no xml schema known for spec version %s", specVersion)

@@ -18,6 +18,7 @@
 package cyclonedx
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
@@ -55,11 +56,23 @@ type jsonBOMEncoder struct {
 
 // Encode implements the BOMEncoder interface.
 func (j jsonBOMEncoder) Encode(bom *BOM) error {
+	var buffer bytes.Buffer
+	if err := j.encode(&buffer, bom); err != nil {
+		return err
+	}
+
+	return writeAll(j.writer, buffer.Bytes())
+}
+
+func (j jsonBOMEncoder) encode(writer io.Writer, bom *BOM) error {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
 	if bom.SpecVersion < SpecVersion1_2 {
 		return fmt.Errorf("json format is not supported for specification versions lower than %s", SpecVersion1_2)
 	}
 
-	encoder := json.NewEncoder(j.writer)
+	encoder := json.NewEncoder(writer)
 	encoder.SetEscapeHTML(j.escapeHTML)
 	if j.pretty {
 		encoder.SetIndent("", "  ")
@@ -70,6 +83,10 @@ func (j jsonBOMEncoder) Encode(bom *BOM) error {
 
 // EncodeVersion implements the BOMEncoder interface.
 func (j jsonBOMEncoder) EncodeVersion(bom *BOM, specVersion SpecVersion) (err error) {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
+
 	bom, err = bom.copyAndConvert(specVersion)
 	if err != nil {
 		return
@@ -97,11 +114,24 @@ type xmlBOMEncoder struct {
 
 // Encode implements the BOMEncoder interface.
 func (x xmlBOMEncoder) Encode(bom *BOM) error {
-	if _, err := fmt.Fprintf(x.writer, xml.Header); err != nil {
+	var buffer bytes.Buffer
+	if err := x.encode(&buffer, bom); err != nil {
 		return err
 	}
 
-	encoder := xml.NewEncoder(x.writer)
+	return writeAll(x.writer, buffer.Bytes())
+}
+
+func (x xmlBOMEncoder) encode(writer io.Writer, bom *BOM) error {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
+
+	if _, err := fmt.Fprintf(writer, xml.Header); err != nil {
+		return err
+	}
+
+	encoder := xml.NewEncoder(writer)
 	if x.pretty {
 		encoder.Indent("", "  ")
 	}
@@ -111,6 +141,10 @@ func (x xmlBOMEncoder) Encode(bom *BOM) error {
 
 // EncodeVersion implements the BOMEncoder interface.
 func (x xmlBOMEncoder) EncodeVersion(bom *BOM, specVersion SpecVersion) (err error) {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
+
 	bom, err = bom.copyAndConvert(specVersion)
 	if err != nil {
 		return
@@ -129,4 +163,22 @@ func (x *xmlBOMEncoder) SetPretty(pretty bool) BOMEncoder {
 func (j *xmlBOMEncoder) SetEscapeHTML(escapeHTML bool) BOMEncoder {
 	// NOOP -- XML always needs to escape HTML
 	return j
+}
+
+// writeAll writes buf to writer only once. Encoding is performed against an
+// in-memory buffer first, so a marshal error can never publish a partial BOM.
+func writeAll(writer io.Writer, buf []byte) error {
+	if writer == nil {
+		return fmt.Errorf("cannot encode to a nil writer")
+	}
+
+	written, err := writer.Write(buf)
+	if err != nil {
+		return err
+	}
+	if written != len(buf) {
+		return io.ErrShortWrite
+	}
+
+	return nil
 }

@@ -46,6 +46,23 @@ possible to *read* BOMs of an older spec, *writing* would exclusively produce BO
 
 Starting with v0.7.0, writing BOMs conforming to all previous version of the spec is also possible.
 
+## Validation
+
+Schema validation and encoding can share one transaction:
+
+```go
+report, err := cyclonedx.ValidateBOM(input, cyclonedx.BOMFileFormatJSON)
+if err != nil {
+    // report is not clean; report.ValidationErrors contains the schema errors.
+}
+
+report, err = cyclonedx.EncodeValidatedBOM(output, input, cyclonedx.BOMFileFormatJSON, cyclonedx.SpecVersion1_6)
+```
+
+`BOMTransaction` freezes the input digest, collects all schema errors, and only
+publishes a deep copy or output after every requested stage succeeded. A failed
+validation or encode never makes a partial BOM or a wrong-version report clean.
+
 ## Copyright & License
 
 CycloneDX Go is Copyright (c) OWASP Foundation. All Rights Reserved.

@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "http://cyclonedx.org/schema/cryptography-defs.schema.json",
+  "$comment": "Companion definitions referenced by bom-1.7.schema.json. The CycloneDX 1.7 schema ships these definitions as a separate document.",
+  "type": "object",
+  "definitions": {
+    "algorithmFamiliesEnum": {
+      "type": "string"
+    },
+    "ellipticCurvesEnum": {
+      "type": "string"
+    }
+  }
+}
