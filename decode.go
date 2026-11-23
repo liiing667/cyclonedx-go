@@ -20,6 +20,7 @@ package cyclonedx
 import (
 	"encoding/json"
 	"encoding/xml"
+	"fmt"
 	"io"
 )
 
@@ -40,11 +41,27 @@ type jsonBOMDecoder struct {
 
 // Decode implements the BOMDecoder interface.
 func (j jsonBOMDecoder) Decode(bom *BOM) error {
-	bytes, err := io.ReadAll(j.reader)
+	if bom == nil {
+		return fmt.Errorf("cannot decode into a nil BOM")
+	}
+
+	data, err := io.ReadAll(j.reader)
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(bytes, bom)
+
+	// Decode and validate a complete candidate before committing it to the
+	// caller's BOM. A failed attempt cannot leave stale or partial content.
+	var decoded BOM
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if err := validateVulnerabilities(&decoded, "decode"); err != nil {
+		return err
+	}
+
+	*bom = decoded
+	return nil
 }
 
 type xmlBOMDecoder struct {
@@ -53,17 +70,29 @@ type xmlBOMDecoder struct {
 
 // Decode implements the BOMDecoder interface.
 func (x xmlBOMDecoder) Decode(bom *BOM) error {
-	err := xml.NewDecoder(x.reader).Decode(bom)
+	if bom == nil {
+		return fmt.Errorf("cannot decode into a nil BOM")
+	}
+
+	// As with JSON, never mutate the caller's BOM until the whole document has
+	// been decoded and validated.
+	var decoded BOM
+	err := xml.NewDecoder(x.reader).Decode(&decoded)
 	if err != nil {
 		return err
 	}
 
 	for specVersion, xmlNs := range xmlNamespaces {
-		if xmlNs == bom.XMLNS {
-			bom.SpecVersion = specVersion
+		if xmlNs == decoded.XMLNS {
+			decoded.SpecVersion = specVersion
 			break
 		}
 	}
 
+	if err := validateVulnerabilities(&decoded, "decode"); err != nil {
+		return err
+	}
+
+	*bom = decoded
 	return nil
 }

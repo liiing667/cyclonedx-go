@@ -55,8 +55,15 @@ type jsonBOMEncoder struct {
 
 // Encode implements the BOMEncoder interface.
 func (j jsonBOMEncoder) Encode(bom *BOM) error {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
 	if bom.SpecVersion < SpecVersion1_2 {
 		return fmt.Errorf("json format is not supported for specification versions lower than %s", SpecVersion1_2)
+	}
+	// Reject ambiguous vulnerability identities before a single byte is written.
+	if err := validateVulnerabilities(bom, "encode"); err != nil {
+		return err
 	}
 
 	encoder := json.NewEncoder(j.writer)
@@ -70,6 +77,9 @@ func (j jsonBOMEncoder) Encode(bom *BOM) error {
 
 // EncodeVersion implements the BOMEncoder interface.
 func (j jsonBOMEncoder) EncodeVersion(bom *BOM, specVersion SpecVersion) (err error) {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
 	bom, err = bom.copyAndConvert(specVersion)
 	if err != nil {
 		return
@@ -97,6 +107,14 @@ type xmlBOMEncoder struct {
 
 // Encode implements the BOMEncoder interface.
 func (x xmlBOMEncoder) Encode(bom *BOM) error {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
+	// Reject ambiguous vulnerability identities before writing the XML header.
+	if err := validateVulnerabilities(bom, "encode"); err != nil {
+		return err
+	}
+
 	if _, err := fmt.Fprintf(x.writer, xml.Header); err != nil {
 		return err
 	}
@@ -111,6 +129,9 @@ func (x xmlBOMEncoder) Encode(bom *BOM) error {
 
 // EncodeVersion implements the BOMEncoder interface.
 func (x xmlBOMEncoder) EncodeVersion(bom *BOM, specVersion SpecVersion) (err error) {
+	if bom == nil {
+		return fmt.Errorf("cannot encode a nil BOM")
+	}
 	bom, err = bom.copyAndConvert(specVersion)
 	if err != nil {
 		return

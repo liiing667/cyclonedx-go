@@ -28,6 +28,9 @@ func (b BOM) copyAndConvert(specVersion SpecVersion) (*BOM, error) {
 	}
 
 	bomCopy.convert(specVersion)
+	if err := validateVulnerabilities(&bomCopy, "convert"); err != nil {
+		return nil, fmt.Errorf("failed to validate converted bom: %w", err)
+	}
 	return &bomCopy, nil
 }
 
@@ -548,7 +551,9 @@ func convertVulnerabilities(vulns *[]Vulnerability, specVersion SpecVersion) {
 		if vuln.Ratings != nil {
 			for j := range *vuln.Ratings {
 				rating := &(*vuln.Ratings)[j]
-				if !specVersion.supportsScoringMethod(rating.Method) {
+				// An omitted method means "unspecified", which is valid and must
+				// not be rewritten to the concrete "other" enum value.
+				if rating.Method != "" && !specVersion.supportsScoringMethod(rating.Method) {
 					rating.Method = ScoringMethodOther
 				}
 			}
